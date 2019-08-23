@@ -36,13 +36,12 @@ import java.util.concurrent.ExecutionException;
 @RequestMapping("/") // The paths for HTTP requests are relative to this base path.
 public class Controller extends CommonController {
     private final CordaRPCOps proxy;
+    private final String secretKey = "venu";
     private final static Logger logger = LoggerFactory.getLogger(Controller.class);
 
     public Controller(RPConnector rpc) {
         this.proxy = rpc.proxy;
     }
-
-
 
     @Autowired
     protected RPConnector connector;
@@ -88,12 +87,13 @@ public class Controller extends CommonController {
         logger.info(" PartyA :",S2);
         logger.info(" ********************************************** ");
 
-        // Creating state
-        studentState = convertToStudentState(studentData,s1Party,S2);
+
+        // Creating state and passing the key for encryption. Encryption is done in convertToStudentState function.
+
+        studentState = convertToStudentState(studentData,secretKey,s1Party,S2);
 
 
         try{
-
             FlowHandle<SignedTransaction> flowHandle = connector.getRPCops().startFlowDynamic(StudentInitiator.class,new StudentFlowData(studentState,studentStateStateAndRef,command));
             signedTransaction = flowHandle.getReturnValue().get();
             logger.info(String.format("signed Tx id: %s", signedTransaction.getId().toString()));
@@ -116,6 +116,23 @@ public class Controller extends CommonController {
 
     }
 
+
+    // this api will return the decrypted result
+
+    @GetMapping("/student/decryptresults")
+    public ResponseEntity getStudentDetails1() throws Exception{
+
+        List<StateAndRef<StudentState>> states = connector.getRPCops().vaultQuery(StudentState.class).getStates();
+
+        // decryption function
+        decryptToStudentState(states,secretKey);
+
+
+        //System.out.println("mapper: "+mapper.writeValueAsString(states));
+        return ResponseEntity.status(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(mapper.writeValueAsString(states));
+    }
+
+
     @GetMapping("/student")
     public ResponseEntity getStudentDetailsById(@RequestParam String id) throws Exception{
 
@@ -136,17 +153,10 @@ public class Controller extends CommonController {
             return ResponseEntity.status(HttpStatus.OK).body("No Records found");
         }
 
-
-
-
     }
 
     private AbstractParty getPartyFromFullName(String partyName) {
-
         CordaX500Name x500Name =CordaX500Name.parse(partyName);
         return connector.getRPCops().wellKnownPartyFromX500Name(x500Name);
     }
-
-
-
 }
